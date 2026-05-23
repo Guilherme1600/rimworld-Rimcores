@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Defs>
+  <MainButtonDef>
+    <defName>RimcoresMainTab</defName>
+    <label>Pawn Stock</label>
+    <description>Manage pawns stored in memory.</description>
+    <tabWindowClass>Rimcores.MainTabWindow_PawnStock</tabWindowClass>
+    <order>95</order>
+    <iconPath>UI/Commands/freeze</iconPath>
+  </MainButtonDef>
+</Defs>

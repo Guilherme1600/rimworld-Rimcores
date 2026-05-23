@@ -1,0 +1,11 @@
+C:\Users\Guilherme Antonio\Desktop\Rimcores\obj\Debug\Rimcores.csproj.AssemblyReference.cache
+C:\Users\Guilherme Antonio\Desktop\Rimcores\obj\Debug\Rimcores.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Guilherme Antonio\Desktop\Rimcores\obj\Debug\Rimcores.AssemblyInfoInputs.cache
+C:\Users\Guilherme Antonio\Desktop\Rimcores\obj\Debug\Rimcores.AssemblyInfo.cs
+C:\Users\Guilherme Antonio\Desktop\Rimcores\obj\Debug\Rimcores.csproj.CoreCompileInputs.cache
+C:\Users\Guilherme Antonio\Desktop\Rimcores\Assemblies\Rimcores.dll
+C:\Users\Guilherme Antonio\Desktop\Rimcores\Assemblies\Rimcores.pdb
+C:\Users\Guilherme Antonio\Desktop\Rimcores\Assemblies\0Harmony.dll
+C:\Users\Guilherme Antonio\Desktop\Rimcores\obj\Debug\Rimcores.csproj.Up2Date
+C:\Users\Guilherme Antonio\Desktop\Rimcores\obj\Debug\Rimcores.dll
+C:\Users\Guilherme Antonio\Desktop\Rimcores\obj\Debug\Rimcores.pdb
