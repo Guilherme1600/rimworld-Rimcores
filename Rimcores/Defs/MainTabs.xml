@@ -6,6 +6,6 @@
     <description>Manage pawns stored in memory.</description>
     <tabWindowClass>Rimcores.MainTabWindow_PawnStock</tabWindowClass>
     <order>95</order>
-    <iconPath>UI/Commands/freeze</iconPath>
+    <iconPath>UI/Commands/box</iconPath>
   </MainButtonDef>
 </Defs>
