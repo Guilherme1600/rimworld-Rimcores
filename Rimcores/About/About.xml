@@ -7,5 +7,9 @@
     <li>1.5</li>
     <li>1.6</li>
   </supportedVersions>
-  <description>The ultimate high-performance engine. Designed for 200+ pawns at 300+ TPS. Bypasses internal speed limits and uses advanced multi-core distribution.</description>
+  <description>Ultimate performance engine.
+- Optimization levels: Simple, VOID, KRYPTON.
+- Full Storage system.
+- Speed overclocking sliders.
+- Advanced entity management.</description>
 </ModMetaData>
