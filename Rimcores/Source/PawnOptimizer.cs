@@ -2,6 +2,7 @@ using HarmonyLib;
 using Verse;
 using Verse.AI;
 using RimWorld;
+using RimWorld.Planet;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -11,16 +12,16 @@ using UnityEngine;
 
 namespace Rimcores
 {
-    // --- DATA STORAGE CLASSES ---
+    // --- CLASSE DE DADOS (GRUPOS) ---
     public class StoredGroup : IExposable
     {
-        public string groupName = "New Group";
         public List<Pawn> pawns = new List<Pawn>();
 
         public void ExposeData()
         {
-            Scribe_Values.Look(ref groupName, "groupName", "New Group");
+            // LookMode.Deep é essencial para não perder o corpo do pawn
             Scribe_Collections.Look(ref pawns, "pawns", LookMode.Deep);
+            if (pawns == null) pawns = new List<Pawn>();
         }
     }
 
@@ -36,6 +37,7 @@ namespace Rimcores
             Scribe_Collections.Look(ref storedPawns, "storedPawns", LookMode.Deep);
             Scribe_Collections.Look(ref storedGroups, "storedGroups", LookMode.Deep);
             Scribe_Collections.Look(ref FrozenPawns, "FrozenPawns", LookMode.Value);
+            
             if (storedPawns == null) storedPawns = new List<Pawn>();
             if (storedGroups == null) storedGroups = new List<StoredGroup>();
             if (FrozenPawns == null) FrozenPawns = new HashSet<int>();
@@ -46,10 +48,9 @@ namespace Rimcores
     {
         public static RimcoresSettings settings;
         public RimcoresMod(ModContentPack content) : base(content) { settings = GetSettings<RimcoresSettings>(); }
-        // Opções de mod removidas como pedido.
     }
 
-    // --- INTERFACE DE DUAS ABAS (STORAGE) ---
+    // --- INTERFACE DE STORAGE ---
     public class MainTabWindow_PawnStock : MainTabWindow
     {
         private Vector2 scrollPos = Vector2.zero;
@@ -59,57 +60,70 @@ namespace Rimcores
         public override void DoWindowContents(Rect inRect)
         {
             Text.Font = GameFont.Medium;
-            Widgets.Label(new Rect(0, 0, 200f, 35f), "Storage");
+            Widgets.Label(new Rect(0, 0, 200f, 35f), "Storage System");
             
-            // Botões de alternância de Aba
-            if (Widgets.ButtonText(new Rect(210f, 5f, 130f, 30f), "INDIVIDUALS")) showGroups = false;
-            if (Widgets.ButtonText(new Rect(350f, 5f, 130f, 30f), "GROUPS")) showGroups = true;
+            if (Widgets.ButtonText(new Rect(210f, 5f, 135f, 30f), "INDIVIDUALS")) showGroups = false;
+            if (Widgets.ButtonText(new Rect(350f, 5f, 135f, 30f), "GROUPS")) showGroups = true;
             
             Text.Font = GameFont.Small;
+            GUI.color = Color.gray;
+            Widgets.DrawLineHorizontal(0, 45f, inRect.width);
+            GUI.color = Color.white;
+
             Rect outRect = new Rect(0, 50f, inRect.width, inRect.height - 60f);
-            float viewHeight = showGroups ? (RimcoresMod.settings.storedGroups.Count * 45f) : (RimcoresMod.settings.storedPawns.Count * 35f);
+            float viewHeight = showGroups ? (RimcoresMod.settings.storedGroups.Count * 40f) : (RimcoresMod.settings.storedPawns.Count * 35f);
             Rect viewRect = new Rect(0, 0, inRect.width - 25f, viewHeight + 50f);
 
             Widgets.BeginScrollView(outRect, ref scrollPos, viewRect);
             float curY = 0;
 
-            if (!showGroups) // ABA INDIVIDUAL
+            if (!showGroups) // INDIVÍDUOS
             {
-                for (int i = 0; i < RimcoresMod.settings.storedPawns.Count; i++)
+                for (int i = RimcoresMod.settings.storedPawns.Count - 1; i >= 0; i--)
                 {
                     Pawn p = RimcoresMod.settings.storedPawns[i];
-                    Widgets.Label(new Rect(5, curY, 250f, 30f), p.LabelShortCap);
-                    if (Widgets.ButtonText(new Rect(300f, curY, 120f, 28f), "RELEASE", true, true, true, null))
+                    if (p == null) { RimcoresMod.settings.storedPawns.RemoveAt(i); continue; }
+
+                    Rect row = new Rect(0, curY, viewRect.width, 30f);
+                    Widgets.Label(new Rect(5, curY + 5, 250f, 30f), p.LabelCap);
+                    if (Widgets.ButtonText(new Rect(viewRect.width - 110f, curY, 100f, 28f), "RELEASE"))
                     {
-                        GenSpawn.Spawn(p, UI.MouseMapPosition().ToIntVec3(), Find.CurrentMap);
+                        SafeSpawn(p);
                         RimcoresMod.settings.storedPawns.RemoveAt(i);
-                        break;
                     }
                     curY += 35f;
                 }
             }
-            else // ABA DE GRUPOS
+            else // GRUPOS
             {
-                for (int i = 0; i < RimcoresMod.settings.storedGroups.Count; i++)
+                for (int i = RimcoresMod.settings.storedGroups.Count - 1; i >= 0; i--)
                 {
                     StoredGroup g = RimcoresMod.settings.storedGroups[i];
-                    Rect row = new Rect(0, curY, viewRect.width, 40f);
-                    
-                    // Campo para mudar nome do grupo
-                    g.groupName = Widgets.TextField(new Rect(5, curY, 150f, 30f), g.groupName);
-                    Widgets.Label(new Rect(165f, curY, 100f, 30f), $"({g.pawns.Count} pawns)");
+                    if (g == null || g.pawns == null) { RimcoresMod.settings.storedGroups.RemoveAt(i); continue; }
 
-                    if (Widgets.ButtonText(new Rect(300f, curY, 120f, 30f), "RELEASE ALL", true, true, true, null))
+                    Rect row = new Rect(0, curY, viewRect.width, 35f);
+                    Widgets.Label(new Rect(5, curY + 5, 250f, 30f), "Group: " + g.pawns.Count + " pawns");
+
+                    if (Widgets.ButtonText(new Rect(viewRect.width - 150f, curY, 140f, 32f), "RELEASE ALL"))
                     {
-                        IntVec3 center = UI.MouseMapPosition().ToIntVec3();
-                        foreach (var p in g.pawns) GenSpawn.Spawn(p, center, Find.CurrentMap);
+                        foreach (var p in g.pawns) SafeSpawn(p);
                         RimcoresMod.settings.storedGroups.RemoveAt(i);
-                        break;
                     }
-                    curY += 45f;
+                    curY += 40f;
                 }
             }
             Widgets.EndScrollView();
+        }
+
+        private void SafeSpawn(Pawn p)
+        {
+            IntVec3 loc = UI.MouseMapPosition().ToIntVec3();
+            if (!loc.IsValid || loc.Impassable(Find.CurrentMap)) 
+                loc = CellFinder.RandomClosewalkCellNear(Find.CameraDriver.MapPosition, Find.CurrentMap, 5);
+            
+            // Re-insere o colono no mundo físico
+            GenSpawn.Spawn(p, loc, Find.CurrentMap, WipeMode.Vanish);
+            if (p.Faction != Faction.OfPlayer) p.SetFaction(Faction.OfPlayer); // Garante que volta como seu
         }
     }
 
@@ -118,14 +132,17 @@ namespace Rimcores
     {
         public static Action<object> fNeeds, fMind, fJobs, fPath;
         public static Texture2D IconFreeze, IconDeath, IconBox, IconGroup;
+        private static readonly ParallelOptions options16 = new ParallelOptions { MaxDegreeOfParallelism = 16 };
 
         static RimcoresLoader()
         {
             var harmony = new Harmony("guilherme.rimcores");
-            fNeeds = AccessTools.MethodDelegate<Action<object>>(AccessTools.Method("RimWorld.Pawn_NeedsTracker:NeedsTrackerTick"));
-            fMind = AccessTools.MethodDelegate<Action<object>>(AccessTools.Method("Verse.AI.Pawn_MindState:MindStateTick"));
-            fJobs = AccessTools.MethodDelegate<Action<object>>(AccessTools.Method("Verse.AI.Pawn_JobTracker:JobTrackerTick"));
-            fPath = AccessTools.MethodDelegate<Action<object>>(AccessTools.Method("Verse.AI.Pawn_PathFollower:PawnPathFollowerTick"));
+            try {
+                fNeeds = AccessTools.MethodDelegate<Action<object>>(AccessTools.Method("RimWorld.Pawn_NeedsTracker:NeedsTrackerTick"));
+                fMind = AccessTools.MethodDelegate<Action<object>>(AccessTools.Method("Verse.AI.Pawn_MindState:MindStateTick"));
+                fJobs = AccessTools.MethodDelegate<Action<object>>(AccessTools.Method("Verse.AI.Pawn_JobTracker:JobTrackerTick"));
+                fPath = AccessTools.MethodDelegate<Action<object>>(AccessTools.Method("Verse.AI.PawnPathFollower:PawnPathFollowerTick"));
+            } catch { }
 
             LongEventHandler.ExecuteWhenFinished(() => {
                 IconFreeze = ContentFinder<Texture2D>.Get("UI/Commands/freeze", false) ?? BaseContent.BadTex;
@@ -135,67 +152,66 @@ namespace Rimcores
             });
             harmony.PatchAll();
         }
-    }
 
-    // --- ENGINE BACKGROUND (KRYPTON AUTOMÁTICO) ---
-    [HarmonyPatch(typeof(TickManager), "DoSingleTick")]
-    public static class MultithreadEnginePatch
-    {
-        static void Postfix()
+        public static void RunEngine(List<Pawn> pawns)
         {
-            if (Find.TickManager.Paused || Find.CurrentMap == null) return;
-            var pawns = Find.CurrentMap.mapPawns.AllPawnsSpawned;
-            
-            Parallel.For(0, pawns.Count, i => {
-                Pawn p = pawns[i];
+            Parallel.ForEach(pawns, options16, p => {
                 if (p == null || RimcoresMod.settings.FrozenPawns.Contains(p.thingIDNumber)) return;
                 try {
-                    RimcoresLoader.fNeeds?.Invoke(p.needs);
-                    RimcoresLoader.fMind?.Invoke(p.mindState);
-                    RimcoresLoader.fJobs?.Invoke(p.jobs);
-                    RimcoresLoader.fPath?.Invoke(p.pather);
+                    fNeeds?.Invoke(p.needs);
+                    fMind?.Invoke(p.mindState);
+                    fJobs?.Invoke(p.jobs);
+                    fPath?.Invoke(p.pather);
                 } catch { }
             });
         }
     }
 
-    // --- GIZMOS ---
+    [HarmonyPatch(typeof(TickManager), "DoSingleTick")]
+    public static class EngineTrigger
+    {
+        static void Postfix()
+        {
+            if (Find.TickManager.Paused || Find.CurrentMap == null) return;
+            var pawns = Find.CurrentMap.mapPawns.AllPawnsSpawned;
+            RimcoresLoader.RunEngine(pawns.ToList());
+        }
+    }
+
     [HarmonyPatch(typeof(Pawn), "GetGizmos")]
     public static class PawnGizmoPatch
     {
         static IEnumerable<Gizmo> Postfix(IEnumerable<Gizmo> __result, Pawn __instance)
         {
             foreach (var g in __result) yield return g;
-            if (__instance.Faction == Faction.OfPlayer)
+
+            if (__instance.Faction != null && __instance.Faction.IsPlayer)
             {
-                // BOTÃO INDIVIDUAL
                 yield return new Command_Action {
                     defaultLabel = "Stock Pawn",
                     icon = RimcoresLoader.IconBox,
                     action = () => {
                         __instance.mindState?.Reset(true, true, true);
                         RimcoresMod.settings.storedPawns.Add(__instance);
-                        __instance.DeSpawn();
+                        __instance.DeSpawn(DestroyMode.Vanish); // Uso de Vanish para não apagar dados
                     }
                 };
 
-                // BOTÃO DE GRUPO (Apenas se houver múltiplos selecionados)
-                if (Find.Selector.SelectedPawns.Count > 1)
+                if (Find.Selector.SelectedObjects.OfType<Pawn>().Count() > 1)
                 {
                     yield return new Command_Action {
-                        defaultLabel = "Group Storage",
+                        defaultLabel = "Store as Group",
                         icon = RimcoresLoader.IconGroup,
                         action = () => {
                             StoredGroup newGroup = new StoredGroup();
-                            List<Pawn> toStore = Find.Selector.SelectedPawns.ToList();
-                            foreach (var p in toStore)
-                            {
+                            var selected = Find.Selector.SelectedObjects.OfType<Pawn>().ToList();
+                            foreach (var p in selected) {
                                 p.mindState?.Reset(true, true, true);
                                 newGroup.pawns.Add(p);
-                                p.DeSpawn();
+                                p.DeSpawn(DestroyMode.Vanish);
                             }
                             RimcoresMod.settings.storedGroups.Add(newGroup);
-                            Messages.Message($"{newGroup.pawns.Count} pawns grouped and stored.", MessageTypeDefOf.PositiveEvent);
+                            Messages.Message("Group stored.", MessageTypeDefOf.PositiveEvent);
                         }
                     };
                 }

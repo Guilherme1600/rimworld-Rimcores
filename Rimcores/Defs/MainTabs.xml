@@ -2,8 +2,8 @@
 <Defs>
   <MainButtonDef>
     <defName>RimcoresMainTab</defName>
-    <label>Pawn Stock</label>
-    <description>Access the memory stock of stored colonists.</description>
+    <label>Storage</label>
+    <description>Access individuals and custom groups stored in memory.</description>
     <tabWindowClass>Rimcores.MainTabWindow_PawnStock</tabWindowClass>
     <order>95</order>
     <iconPath>UI/Commands/box</iconPath>
