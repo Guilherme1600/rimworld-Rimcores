@@ -3,7 +3,7 @@
   <MainButtonDef>
     <defName>RimcoresMainTab</defName>
     <label>Storage</label>
-    <description>Access individuals and custom groups stored in memory.</description>
+    <description>Storage for individuals and groups.</description>
     <tabWindowClass>Rimcores.MainTabWindow_PawnStock</tabWindowClass>
     <order>95</order>
     <iconPath>UI/Commands/box</iconPath>
