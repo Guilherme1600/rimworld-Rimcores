@@ -2,6 +2,7 @@ using HarmonyLib;
 using Verse;
 using Verse.AI;
 using RimWorld;
+using RimWorld.Planet;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -11,11 +12,29 @@ using UnityEngine;
 
 namespace Rimcores
 {
-    // --- CLASSE DO GRUPO (SÓ EXISTE SE TIVER PAWNS) ---
+    // --- 1. PERSISTÊNCIA ETERNA (SALVA NO SEU SAVE .RWS) ---
+    public class RimcoresWorldComponent : WorldComponent
+    {
+        public List<Pawn> storedPawns = new List<Pawn>();
+        public List<StoredGroup> storedGroups = new List<StoredGroup>();
+
+        public RimcoresWorldComponent(World world) : base(world) { }
+
+        public override void ExposeData()
+        {
+            base.ExposeData();
+            // LookMode.Deep garante que o DNA, Roupas e Armas fiquem no ficheiro de save
+            Scribe_Collections.Look(ref storedPawns, "storedPawns", LookMode.Deep);
+            Scribe_Collections.Look(ref storedGroups, "storedGroups", LookMode.Deep);
+
+            if (storedPawns == null) storedPawns = new List<Pawn>();
+            if (storedGroups == null) storedGroups = new List<StoredGroup>();
+        }
+    }
+
     public class StoredGroup : IExposable
     {
         public List<Pawn> pawns = new List<Pawn>();
-
         public void ExposeData()
         {
             Scribe_Collections.Look(ref pawns, "pawns", LookMode.Deep);
@@ -25,19 +44,11 @@ namespace Rimcores
 
     public class RimcoresSettings : ModSettings
     {
-        public List<Pawn> storedPawns = new List<Pawn>();
-        public List<StoredGroup> storedGroups = new List<StoredGroup>();
         public HashSet<int> FrozenPawns = new HashSet<int>();
-
         public override void ExposeData()
         {
             base.ExposeData();
-            Scribe_Collections.Look(ref storedPawns, "storedPawns", LookMode.Deep);
-            Scribe_Collections.Look(ref storedGroups, "storedGroups", LookMode.Deep);
             Scribe_Collections.Look(ref FrozenPawns, "FrozenPawns", LookMode.Value);
-            
-            if (storedPawns == null) storedPawns = new List<Pawn>();
-            if (storedGroups == null) storedGroups = new List<StoredGroup>();
             if (FrozenPawns == null) FrozenPawns = new HashSet<int>();
         }
     }
@@ -48,7 +59,7 @@ namespace Rimcores
         public RimcoresMod(ModContentPack content) : base(content) { settings = GetSettings<RimcoresSettings>(); }
     }
 
-    // --- INTERFACE 100% DINÂMICA (SEM SLOTS VAZIOS) ---
+    // --- 2. INTERFACE DYNAMICA (SEM SLOTS VAZIOS) ---
     public class MainTabWindow_PawnStock : MainTabWindow
     {
         private Vector2 scrollPos = Vector2.zero;
@@ -57,8 +68,11 @@ namespace Rimcores
 
         public override void DoWindowContents(Rect inRect)
         {
+            var comp = Find.World.GetComponent<RimcoresWorldComponent>();
+            if (comp == null) return;
+
             Text.Font = GameFont.Medium;
-            Widgets.Label(new Rect(0, 0, 200f, 35f), "Storage");
+            Widgets.Label(new Rect(0, 0, 200f, 35f), "Storage System");
             
             if (Widgets.ButtonText(new Rect(210f, 5f, 135f, 30f), "INDIVIDUALS")) showGroups = false;
             if (Widgets.ButtonText(new Rect(355f, 5f, 135f, 30f), "GROUPS")) showGroups = true;
@@ -67,48 +81,43 @@ namespace Rimcores
             Widgets.DrawLineHorizontal(0, 45f, inRect.width);
 
             Rect outRect = new Rect(0, 50f, inRect.width, inRect.height - 60f);
-            
-            // O segredo do Rimcores: A altura da lista é calculada no exato momento
-            int itemCount = showGroups ? RimcoresMod.settings.storedGroups.Count : RimcoresMod.settings.storedPawns.Count;
-            float viewHeight = (itemCount * 40f) + 20f;
+            int itemCount = showGroups ? comp.storedGroups.Count : comp.storedPawns.Count;
+            float viewHeight = (itemCount * 40f) + 50f;
             Rect viewRect = new Rect(0, 0, inRect.width - 25f, viewHeight);
 
             Widgets.BeginScrollView(outRect, ref scrollPos, viewRect);
             float curY = 0;
 
-            if (!showGroups) // INDIVIDUALS
+            if (!showGroups) // ABA INDIVIDUOS
             {
-                for (int i = RimcoresMod.settings.storedPawns.Count - 1; i >= 0; i--)
+                for (int i = comp.storedPawns.Count - 1; i >= 0; i--)
                 {
-                    Pawn p = RimcoresMod.settings.storedPawns[i];
-                    if (p == null) { RimcoresMod.settings.storedPawns.RemoveAt(i); continue; }
+                    Pawn p = comp.storedPawns[i];
+                    if (p == null) { comp.storedPawns.RemoveAt(i); continue; }
 
+                    Rect row = new Rect(0, curY, viewRect.width, 30f);
                     Widgets.Label(new Rect(5, curY + 5, 250f, 30f), p.LabelCap);
                     if (Widgets.ButtonText(new Rect(viewRect.width - 120f, curY, 110f, 30f), "RELEASE"))
                     {
-                        SpawnPawn(p);
-                        RimcoresMod.settings.storedPawns.RemoveAt(i);
+                        SpawnAtMouse(p);
+                        comp.storedPawns.RemoveAt(i);
                     }
                     curY += 40f;
                 }
             }
-            else // GROUPS (AGORA SEM SLOTS VAZIOS)
+            else // ABA GRUPOS
             {
-                if (RimcoresMod.settings.storedGroups.Count == 0)
+                for (int i = comp.storedGroups.Count - 1; i >= 0; i--)
                 {
-                    Widgets.Label(new Rect(inRect.width / 4, 100f, 250f, 30f), "No groups in storage.");
-                }
+                    StoredGroup g = comp.storedGroups[i];
+                    if (g == null || g.pawns.Count == 0) { comp.storedGroups.RemoveAt(i); continue; }
 
-                for (int i = RimcoresMod.settings.storedGroups.Count - 1; i >= 0; i--)
-                {
-                    StoredGroup g = RimcoresMod.settings.storedGroups[i];
-                    if (g == null || g.pawns.Count == 0) { RimcoresMod.settings.storedGroups.RemoveAt(i); continue; }
-
-                    Widgets.Label(new Rect(5, curY + 5, 250f, 30f), "Group of " + g.pawns.Count + " pawns");
-                    if (Widgets.ButtonText(new Rect(viewRect.width - 140f, curY, 130f, 32f), "RELEASE ALL"))
+                    Rect row = new Rect(0, curY, viewRect.width, 35f);
+                    Widgets.Label(new Rect(5, curY + 5, 250f, 30f), "Group: " + g.pawns.Count + " units");
+                    if (Widgets.ButtonText(new Rect(viewRect.width - 150f, curY, 140f, 32f), "RELEASE ALL"))
                     {
-                        foreach (var p in g.pawns) SpawnPawn(p);
-                        RimcoresMod.settings.storedGroups.RemoveAt(i); // Remove e a linha desaparece no próximo frame
+                        foreach (var p in g.pawns) SpawnAtMouse(p);
+                        comp.storedGroups.RemoveAt(i);
                     }
                     curY += 40f;
                 }
@@ -116,17 +125,16 @@ namespace Rimcores
             Widgets.EndScrollView();
         }
 
-        private void SpawnPawn(Pawn p)
+        private void SpawnAtMouse(Pawn p)
         {
             IntVec3 pos = UI.MouseMapPosition().ToIntVec3();
             if (!pos.IsValid || pos.Impassable(Find.CurrentMap)) 
                 pos = CellFinder.RandomClosewalkCellNear(Find.CameraDriver.MapPosition, Find.CurrentMap, 2);
-            
             GenSpawn.Spawn(p, pos, Find.CurrentMap, WipeMode.Vanish);
         }
     }
 
-    // --- ENGINE MULTITHREAD (16 CORES SEMPRE ON) ---
+    // --- 3. MOTOR DE OTIMIZAÇÃO (16 CORES) ---
     [StaticConstructorOnStartup]
     public static class RimcoresLoader
     {
@@ -151,8 +159,10 @@ namespace Rimcores
                 IconGroup = ContentFinder<Texture2D>.Get("UI/Commands/group", false) ?? BaseContent.BadTex;
             });
             harmony.PatchAll();
+            Log.Message("[Rimcores] v48 Eternal-Core Active.");
         }
 
+        // FIX: Função renomeada corretamente para coincidir com a chamada no Patch
         public static void RunBackgroundEngine(IEnumerable<Pawn> pawns)
         {
             Parallel.ForEach(pawns, options16, p => {
@@ -169,26 +179,34 @@ namespace Rimcores
     public static class MultithreadTickPatch {
         static void Postfix() {
             if (Find.TickManager.Paused || Find.CurrentMap == null) return;
+            // Chama a função com o nome correto agora
             RimcoresLoader.RunBackgroundEngine(Find.CurrentMap.mapPawns.AllPawnsSpawned);
         }
     }
 
-    // --- COMANDOS (BOTÕES NO PAWN) ---
+    // --- 4. GIZMOS (BOTOES NO PAWN) ---
     [HarmonyPatch(typeof(Pawn), "GetGizmos")]
     public static class PawnGizmoPatch
     {
         static IEnumerable<Gizmo> Postfix(IEnumerable<Gizmo> __result, Pawn __instance)
         {
             foreach (var g in __result) yield return g;
-
             if (__instance.Faction != null && __instance.Faction.IsPlayer)
             {
+                var comp = Find.World.GetComponent<RimcoresWorldComponent>();
+                if (comp == null) yield break;
+
+                // INDIVIDUAL
                 yield return new Command_Action {
                     defaultLabel = "Stock Pawn", icon = RimcoresLoader.IconBox,
-                    action = () => { __instance.mindState?.Reset(true, true, true); RimcoresMod.settings.storedPawns.Add(__instance); __instance.DeSpawn(DestroyMode.Vanish); }
+                    action = () => {
+                        __instance.mindState?.Reset(true, true, true);
+                        comp.storedPawns.Add(__instance);
+                        __instance.DeSpawn(DestroyMode.Vanish);
+                    }
                 };
 
-                // CRIAÇÃO DO GRUPO DINÂMICO
+                // GRUPO DINAMICO
                 if (Find.Selector.SelectedObjects.OfType<Pawn>().Count() > 1)
                 {
                     yield return new Command_Action {
@@ -201,8 +219,7 @@ namespace Rimcores
                                 newGroup.pawns.Add(p);
                                 p.DeSpawn(DestroyMode.Vanish);
                             }
-                            RimcoresMod.settings.storedGroups.Add(newGroup);
-                            Messages.Message("New group stored.", MessageTypeDefOf.PositiveEvent);
+                            comp.storedGroups.Add(newGroup);
                         }
                     };
                 }
@@ -210,7 +227,10 @@ namespace Rimcores
                 bool isFrozen = RimcoresMod.settings.FrozenPawns.Contains(__instance.thingIDNumber);
                 yield return new Command_Action {
                     defaultLabel = isFrozen ? "Unfreeze" : "Freeze", icon = RimcoresLoader.IconFreeze,
-                    action = () => { if (isFrozen) RimcoresMod.settings.FrozenPawns.Remove(__instance.thingIDNumber); else RimcoresMod.settings.FrozenPawns.Add(__instance.thingIDNumber); }
+                    action = () => {
+                        if (isFrozen) RimcoresMod.settings.FrozenPawns.Remove(__instance.thingIDNumber);
+                        else RimcoresMod.settings.FrozenPawns.Add(__instance.thingIDNumber);
+                    }
                 };
                 yield return new Command_Action { defaultLabel = "Kill", icon = RimcoresLoader.IconDeath, action = () => __instance.Kill(null) };
             }
